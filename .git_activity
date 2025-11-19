@@ -2,3 +2,4 @@
 # Repository Activity Log - Kinexa
 2025-11-16T11:47:17 | fix(types): update workout data model interfaces
 2025-11-19T13:47:06 | docs: update installation and setup instructions
+2025-11-19T21:47:57 | chore: clean up obsolete helpers and test fixtures
