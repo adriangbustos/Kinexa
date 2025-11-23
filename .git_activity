@@ -4,3 +4,4 @@
 2025-11-19T13:47:06 | docs: update installation and setup instructions
 2025-11-19T21:47:57 | chore: clean up obsolete helpers and test fixtures
 2025-11-23T11:01:05 | fix(types): update workout data model interfaces
+2025-11-23T14:14:32 | feat(reporting): add draft structure for exercise analytics
