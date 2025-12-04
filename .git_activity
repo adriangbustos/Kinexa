@@ -11,3 +11,4 @@
 2025-11-27T15:51:55 | fix(types): update workout data model interfaces
 2025-11-30T15:09:13 | perf: reduce state re-renders in tracker component
 2025-11-30T16:06:05 | refactor(engine): optimize exercise calculation routines
+2025-12-04T11:46:29 | docs: update installation and setup instructions
