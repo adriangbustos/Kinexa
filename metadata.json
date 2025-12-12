@@ -1,0 +1,7 @@
+{
+  "name": "Kinexa",
+  "description": "AI-powered physical therapy companion using computer vision and generative AI.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
