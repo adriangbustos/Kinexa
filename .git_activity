@@ -22,3 +22,4 @@
 2025-12-13T16:13:42 | chore: clean up obsolete helpers and test fixtures
 2025-12-15T13:29:24 | chore: clean up obsolete helpers and test fixtures
 2025-12-15T19:46:15 | feat(reporting): add draft structure for exercise analytics
+2025-12-18T11:14:52 | refactor(engine): optimize exercise calculation routines
