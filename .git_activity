@@ -24,3 +24,4 @@
 2025-12-15T19:46:15 | feat(reporting): add draft structure for exercise analytics
 2025-12-18T11:14:52 | refactor(engine): optimize exercise calculation routines
 2025-12-18T21:20:53 | perf: reduce state re-renders in tracker component
+2025-12-21T14:58:36 | feat(reporting): add draft structure for exercise analytics
