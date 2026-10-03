@@ -105,8 +105,11 @@ export const getUserSessions = async (userId: string): Promise<Session[]> => {
         timestamp: (data.timestamp as Timestamp).toDate(),
         durationSeconds: data.durationSeconds,
         exercises: data.exercises,
+        exerciseStats: data.exerciseStats || {},
         painLevel: data.painLevel,
         accuracyScore: data.accuracyScore,
+        reps: data.reps,
+        averageAngle: data.averageAngle,
         aiSummary: data.aiSummary,
       } as Session;
     });
@@ -120,6 +123,7 @@ export const getUserSessions = async (userId: string): Promise<Session[]> => {
         timestamp: new Date(Date.now() - 86400000 * 1), // 1 day ago
         durationSeconds: 1240,
         exercises: ['Squats', 'Lunges'],
+        exerciseStats: { 'Squats': 30, 'Lunges': 20 },
         painLevel: 3,
         accuracyScore: 85,
         aiSummary: 'Great stability on the left knee. Slight valgus observed during deep squats. Recommended focusing on glute medius activation.'
@@ -130,6 +134,7 @@ export const getUserSessions = async (userId: string): Promise<Session[]> => {
         timestamp: new Date(Date.now() - 86400000 * 3), // 3 days ago
         durationSeconds: 900,
         exercises: ['Hip Bridges', 'Clamshells'],
+        exerciseStats: { 'Hip Bridges': 15, 'Clamshells': 20 },
         painLevel: 5,
         accuracyScore: 72,
         aiSummary: 'Movement was consistent but range of motion was limited due to reported pain. Good adherence to tempo.'
@@ -140,6 +145,7 @@ export const getUserSessions = async (userId: string): Promise<Session[]> => {
         timestamp: new Date(Date.now() - 86400000 * 7), // 7 days ago
         durationSeconds: 1500,
         exercises: ['Squats', 'Planks'],
+        exerciseStats: { 'Squats': 40, 'Planks': 120 },
         painLevel: 2,
         accuracyScore: 91,
         aiSummary: 'Excellent form today. Your knee alignment has improved by 10% since last week.'

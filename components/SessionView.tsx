@@ -11,15 +11,41 @@ interface SessionViewProps {
 const EXERCISE_OPTIONS = [
   'Squats',
   'Pushups',
-  'Burpees',
-  'Lunges',
-  'Triceps Dip',
+  'Lateral Lunge',
   'Plank',
-  'Mountain Climber',
-  'Stretches'
 ];
 
-type ExercisePhase = 'STANDING' | 'DESCENDING' | 'BOTTOM' | 'ASCENDING' | 'HOLDING' | 'REST';
+// --- 4. Threshold Dictionary ---
+const EXERCISE_RULES = {
+  Squats: {
+    type: 'REP',
+    metric: 'Angle',
+    front: { start: 165, active: 130 },
+    lateral: { start: 160, active: 100 }, 
+  },
+  Pushups: {
+    type: 'REP',
+    metric: 'Elbow Angle',
+    lateral: { start: 160, active: 90 },
+    front: { start: 160, active: 90 },
+  },
+  'Lateral Lunge': {
+    type: 'REP',
+    metric: 'Working Knee',
+    startAngle: 165,    
+    workingMax: 110,    
+    staticMin: 150,     
+    hipDropThreshold: 0.1 
+  },
+  Plank: {
+    type: 'DURATION',
+    metric: 'Body Alignment',
+    minAngle: 165,
+    maxAngle: 195,
+  }
+};
+
+type ExerciseState = 'START' | 'ACTIVE';
 
 export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
   const webcamRef = useRef<Webcam>(null);
@@ -30,48 +56,93 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
   const [repCount, setRepCount] = useState(0);
   const [displayMetric, setDisplayMetric] = useState<number>(0); 
   const [metricLabel, setMetricLabel] = useState('Angle');
-  const [phase, setPhase] = useState<ExercisePhase>('STANDING');
-  const [holdTimer, setHoldTimer] = useState(0);
-  
-  // Feedback State
-  const [isBadForm, setIsBadForm] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string>('');
+  const [isBadForm, setIsBadForm] = useState(false);
   
-  // Deep Analysis State
+  // Session Accumulation State
+  const accumulatedStats = useRef<Record<string, number>>({});
+  
+  // State Machine Indicators
+  const [exerciseState, setExerciseState] = useState<ExerciseState>('START');
+  const [holdTimer, setHoldTimer] = useState(0);
+
+  // Analysis & Countdown State
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [showFlash, setShowFlash] = useState(false);
   const [coachInsight, setCoachInsight] = useState<string | null>(null);
 
   // Logic Refs
   const startTimeRef = useRef<number>(Date.now());
   const requestRef = useRef<number | null>(null);
+  const statsRef = useRef({ goodFrames: 0, totalFrames: 0 });
   const angleSumRef = useRef(0);
   const angleFrameCountRef = useRef(0);
-  
-  // State Machine Ref (To avoid stale closures in loop)
-  const phaseRef = useRef<ExercisePhase>('STANDING');
-  const statsRef = useRef({ goodFrames: 0, totalFrames: 0 });
-  const lastHoldTickRef = useRef<number>(0);
 
-  // --- Geometry Helpers ---
+  // Tracking Refs
+  const stateRef = useRef<ExerciseState>('START');
+  const lastRepTimeRef = useRef<number>(0);
+  const activeStartTimeRef = useRef<number>(0);
+  const lastTimerTickRef = useRef<number>(0);
+  const standingHipYRef = useRef<number>(0);
+
+  // --- Helpers ---
   const calculateAngle = (a: any, b: any, c: any) => {
+    if (!a || !b || !c) return 180;
     const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
     let angle = Math.abs(radians * 180.0 / Math.PI);
     if (angle > 180.0) angle = 360 - angle;
     return Math.round(angle);
   };
 
-  const calculateDistanceX = (a: any, b: any) => Math.abs(a.x - b.x);
+  const getDominantSide = (landmarks: any[]) => {
+    const leftVis = landmarks[11].visibility + landmarks[23].visibility + landmarks[25].visibility;
+    const rightVis = landmarks[12].visibility + landmarks[24].visibility + landmarks[26].visibility;
+    return leftVis > rightVis ? 'LEFT' : 'RIGHT';
+  };
+
+  const checkPlankForm = (shoulder: any, hip: any, knee: any) => {
+    const angle = calculateAngle(shoulder, hip, knee);
+    const rules = EXERCISE_RULES.Plank;
+    return angle >= rules.minAngle && angle <= rules.maxAngle;
+  };
+
+  // --- Logic to Switch Exercise & Save Stats ---
+  const switchExercise = (newExercise: string) => {
+    // 1. Save current stats before switching
+    const currentValue = currentExercise === 'Plank' ? holdTimer : repCount;
+    if (currentValue > 0) {
+      accumulatedStats.current[currentExercise] = (accumulatedStats.current[currentExercise] || 0) + currentValue;
+    }
+    
+    // 2. Switch
+    setCurrentExercise(newExercise);
+  };
 
   useEffect(() => {
-    // Reset stats on exercise change
+    // Reset Counters on exercise change
     setRepCount(0);
     setHoldTimer(0);
-    statsRef.current = { goodFrames: 0, totalFrames: 0 };
-    angleSumRef.current = 0;
-    angleFrameCountRef.current = 0;
-    phaseRef.current = 'STANDING';
-    setPhase('STANDING');
+    setFeedbackMessage('');
+    setIsBadForm(false);
+    stateRef.current = 'START';
+    setExerciseState('START');
+    // Note: We do NOT reset accumulatedStats here
+    
+    // Reset tracking refs specific to exercise mechanics
+    standingHipYRef.current = 0;
   }, [currentExercise]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (countdown !== null && countdown > 0) {
+      timer = setTimeout(() => setCountdown(c => (c !== null ? c - 1 : null)), 1000);
+    } else if (countdown === 0) {
+      setCountdown(null);
+      performCaptureAndAnalysis();
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
   useEffect(() => {
     let pose: any = null;
@@ -79,6 +150,7 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
 
     const onResults = (results: any) => {
       if (!canvasRef.current || !webcamRef.current?.video) return;
+      if (!results.poseLandmarks) return;
 
       const videoWidth = webcamRef.current.video.videoWidth;
       const videoHeight = webcamRef.current.video.videoHeight;
@@ -91,160 +163,223 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
 
       canvasCtx.save();
       canvasCtx.clearRect(0, 0, videoWidth, videoHeight);
+      
+      const lm = results.poseLandmarks;
+      
+      const side = getDominantSide(lm);
+      const isLeft = side === 'LEFT';
+      
+      const shoulder = isLeft ? lm[11] : lm[12];
+      const hip = isLeft ? lm[23] : lm[24];
+      const knee = isLeft ? lm[25] : lm[26];
+      const ankle = isLeft ? lm[27] : lm[28];
+      const elbow = isLeft ? lm[13] : lm[14];
+      const wrist = isLeft ? lm[15] : lm[16];
 
-      if (results.poseLandmarks) {
-        const lm = results.poseLandmarks;
-        const leftEar = lm[7];
-        const rightEar = lm[8];
-        const leftShoulder = lm[11];
-        const rightShoulder = lm[12];
-        const leftHip = lm[23];
-        const rightHip = lm[24];
-        const leftKnee = lm[25];
-        const rightKnee = lm[26];
-        const leftAnkle = lm[27];
-        const rightAnkle = lm[28];
+      const shoulderWidth = Math.abs(lm[11].x - lm[12].x);
+      const isLateral = shoulderWidth < 0.15; 
 
-        statsRef.current.totalFrames++;
-        let frameBadForm = false;
-        let frameMsg = '';
+      let currentMetric = 0;
+      let formError = '';
+      let isFormGood = true;
 
-        // Auto Lateral Detection
-        const shoulderWidthX = calculateDistanceX(leftShoulder, rightShoulder);
-        const isLateral = shoulderWidthX < 0.15; 
-
-        if (isLateral) {
-            setMetricLabel('Lateral');
-            setDisplayMetric(Math.round(shoulderWidthX * 100));
-
-            const isLeft = leftShoulder.visibility > rightShoulder.visibility;
-            const ear = isLeft ? leftEar : rightEar;
-            const shoulder = isLeft ? leftShoulder : rightShoulder;
-            const hip = isLeft ? leftHip : rightHip;
-            const knee = isLeft ? leftKnee : rightKnee;
-            const ankle = isLeft ? leftAnkle : rightAnkle;
-
-            // Simple Lateral Squat Logic if Needed
-            if (currentExercise === 'Squats') {
-                 const angle = calculateAngle(hip, knee, ankle);
-                 setDisplayMetric(angle);
+      switch(currentExercise) {
+        case 'Squats': {
+            const rules = EXERCISE_RULES.Squats;
+            if (isLateral) {
+                setMetricLabel('Hip Angle');
+                currentMetric = calculateAngle(shoulder, hip, knee);
+            } else {
+                setMetricLabel('Knee Angle');
+                currentMetric = calculateAngle(hip, knee, ankle);
             }
+            setDisplayMetric(currentMetric);
 
-            const headOffset = Math.abs(ear.x - shoulder.x);
-            if (headOffset > 0.08) {
-                frameBadForm = true;
-                frameMsg = "Head forward detected.";
-            }
+            const thresholds = isLateral ? rules.lateral : rules.front;
 
-            canvasCtx.beginPath();
-            canvasCtx.moveTo(ear.x * videoWidth, ear.y * videoHeight);
-            canvasCtx.lineTo(hip.x * videoWidth, hip.y * videoHeight);
-            canvasCtx.strokeStyle = frameBadForm ? '#EF4444' : '#778873';
-            canvasCtx.lineWidth = 3;
-            canvasCtx.setLineDash([5, 5]);
-            canvasCtx.stroke();
-            canvasCtx.setLineDash([]);
-
-        } else {
-            switch(currentExercise) {
-                case 'Squats': {
-                    setMetricLabel('Knee Angle');
-                    const angle = calculateAngle(leftHip, leftKnee, leftAnkle);
-                    setDisplayMetric(angle);
+            if (stateRef.current === 'START') {
+                if (currentMetric <= thresholds.active) {
+                    stateRef.current = 'ACTIVE';
+                    setExerciseState('ACTIVE');
+                    activeStartTimeRef.current = Date.now();
+                }
+            } else if (stateRef.current === 'ACTIVE') {
+                if (currentMetric >= thresholds.start) {
+                    const now = Date.now();
+                    const durationInActive = now - activeStartTimeRef.current;
+                    const timeSinceLastRep = now - lastRepTimeRef.current;
                     
-                    angleSumRef.current += angle;
-                    angleFrameCountRef.current += 1;
-
-                    // --- SQUAT STATE MACHINE ---
-                    // State A (Standing): > 165
-                    // State B (Bottom): < 140
-                    const currentPhase = phaseRef.current;
-                    let nextPhase = currentPhase;
-
-                    if (currentPhase === 'STANDING') {
-                        if (angle < 160) nextPhase = 'DESCENDING';
-                    } 
-                    else if (currentPhase === 'DESCENDING') {
-                        if (angle < 140) nextPhase = 'BOTTOM';
-                        else if (angle > 170) nextPhase = 'STANDING'; // Aborted rep
+                    if (durationInActive > 200 && timeSinceLastRep > 1000) {
+                        setRepCount(c => c + 1);
+                        lastRepTimeRef.current = now;
                     }
-                    else if (currentPhase === 'BOTTOM') {
-                        if (angle > 140) nextPhase = 'ASCENDING';
-                    }
-                    else if (currentPhase === 'ASCENDING') {
-                        if (angle > 165) {
-                            nextPhase = 'STANDING';
-                            setRepCount(c => c + 1); // SUCCESSFUL REP
-                        } else if (angle < 130) {
-                            nextPhase = 'BOTTOM'; // Failed to rise, went back down
-                        }
-                    }
-
-                    if (nextPhase !== currentPhase) {
-                        phaseRef.current = nextPhase;
-                        setPhase(nextPhase);
-                    }
-
-                    const hipSep = Math.abs(leftHip.x - rightHip.x);
-                    const kneeSep = Math.abs(leftKnee.x - rightKnee.x);
-                    if (kneeSep < (hipSep * 0.75)) {
-                        frameBadForm = true;
-                        frameMsg = "Knee valgus detected.";
-                    }
-                    break;
+                    stateRef.current = 'START';
+                    setExerciseState('START');
                 }
-                case 'Plank': {
-                    setMetricLabel('Shoulder Level');
-                    const shoulderSlope = Math.abs(leftShoulder.y - rightShoulder.y);
-                    setDisplayMetric(Math.round(shoulderSlope * 100));
-
-                    // Timer Logic
-                    // If slope is good (< 0.15) increment hold timer
-                    if (shoulderSlope < 0.15) {
-                        const now = Date.now();
-                        if (now - lastHoldTickRef.current > 1000) {
-                            setHoldTimer(t => t + 1);
-                            lastHoldTickRef.current = now;
-                        }
-                        if (phaseRef.current !== 'HOLDING') {
-                            phaseRef.current = 'HOLDING';
-                            setPhase('HOLDING');
-                        }
-                    } else {
-                         frameBadForm = true;
-                         frameMsg = "Keep shoulders level.";
-                         if (phaseRef.current !== 'REST') {
-                             phaseRef.current = 'REST';
-                             setPhase('REST');
-                         }
-                    }
-                    break;
-                }
-                default:
-                    setDisplayMetric(0);
-                    setMetricLabel('Tracking');
-                    break;
             }
+            
+            if (!isLateral) {
+                const hipSep = Math.abs(lm[23].x - lm[24].x);
+                const kneeSep = Math.abs(lm[25].x - lm[26].x);
+                if (kneeSep < hipSep * 0.7) {
+                    formError = "Push knees outward";
+                    isFormGood = false;
+                }
+            }
+            break;
         }
 
-        if (frameBadForm) {
-            setIsBadForm(true);
-            setFeedbackMessage(frameMsg);
-        } else {
-            setIsBadForm(false);
-            setFeedbackMessage('');
-            statsRef.current.goodFrames++;
+        case 'Pushups': {
+            setMetricLabel('Elbow Angle');
+            currentMetric = calculateAngle(shoulder, elbow, wrist);
+            setDisplayMetric(currentMetric);
+
+            const rules = EXERCISE_RULES.Pushups;
+            const thresholds = rules.lateral;
+
+            if (stateRef.current === 'START') {
+                if (currentMetric <= thresholds.active) {
+                    stateRef.current = 'ACTIVE';
+                    setExerciseState('ACTIVE');
+                    activeStartTimeRef.current = Date.now();
+                }
+            } else if (stateRef.current === 'ACTIVE') {
+                if (currentMetric >= thresholds.start) {
+                    const now = Date.now();
+                    if ((now - activeStartTimeRef.current > 200) && (now - lastRepTimeRef.current > 1000)) {
+                        setRepCount(c => c + 1);
+                        lastRepTimeRef.current = now;
+                    }
+                    stateRef.current = 'START';
+                    setExerciseState('START');
+                }
+            }
+            break;
         }
 
-        const skeletonColor = frameBadForm ? '#EF4444' : '#778873';
-        const landmarkColor = frameBadForm ? '#EF4444' : '#D2DCB6';
-        
-        window.drawConnectors(canvasCtx, results.poseLandmarks, window.POSE_CONNECTIONS,
-            { color: skeletonColor, lineWidth: 4 });
-        
-        window.drawLandmarks(canvasCtx, results.poseLandmarks,
-            { color: landmarkColor, lineWidth: 2, radius: 4 });
+        case 'Lateral Lunge': {
+            setMetricLabel('Working Knee');
+            const rules = EXERCISE_RULES['Lateral Lunge'];
+            
+            const lKneeAngle = calculateAngle(lm[23], lm[25], lm[27]);
+            const rKneeAngle = calculateAngle(lm[24], lm[26], lm[28]);
+            const currentHipY = (lm[23].y + lm[24].y) / 2;
+            const workingKneeAngle = Math.min(lKneeAngle, rKneeAngle);
+            const staticKneeAngle = Math.max(lKneeAngle, rKneeAngle);
+            
+            currentMetric = workingKneeAngle;
+            setDisplayMetric(currentMetric);
+
+            if (stateRef.current === 'START') {
+                if (lKneeAngle > rules.startAngle && rKneeAngle > rules.startAngle) {
+                    if (standingHipYRef.current === 0 || currentHipY < standingHipYRef.current) {
+                        standingHipYRef.current = currentHipY;
+                    }
+                }
+                const hipDrop = currentHipY - standingHipYRef.current; 
+                
+                if (workingKneeAngle < rules.workingMax && 
+                    staticKneeAngle > rules.staticMin &&
+                    hipDrop > rules.hipDropThreshold) {
+                        stateRef.current = 'ACTIVE';
+                        setExerciseState('ACTIVE');
+                        activeStartTimeRef.current = Date.now();
+                }
+            } else if (stateRef.current === 'ACTIVE') {
+                if (lKneeAngle > rules.startAngle && rKneeAngle > rules.startAngle) {
+                     const now = Date.now();
+                     const durationInActive = now - activeStartTimeRef.current;
+                     const timeSinceLastRep = now - lastRepTimeRef.current;
+
+                     if (durationInActive > 300 && timeSinceLastRep > 1000) {
+                         setRepCount(c => c + 1);
+                         lastRepTimeRef.current = now;
+                     }
+                     stateRef.current = 'START';
+                     setExerciseState('START');
+                }
+            }
+            break;
+        }
+
+        case 'Plank': {
+            setMetricLabel('Align Angle');
+            const alignmentAngle = calculateAngle(shoulder, hip, knee);
+            currentMetric = alignmentAngle;
+            setDisplayMetric(currentMetric);
+
+            const isAligned = checkPlankForm(shoulder, hip, knee);
+
+            if (isAligned) {
+                const now = Date.now();
+                if (now - lastTimerTickRef.current >= 1000) {
+                    setHoldTimer(t => t + 1);
+                    lastTimerTickRef.current = now;
+                }
+                if (stateRef.current !== 'ACTIVE') {
+                    stateRef.current = 'ACTIVE';
+                    setExerciseState('ACTIVE');
+                }
+            } else {
+                formError = "Align Hips to Resume";
+                isFormGood = false;
+                if (stateRef.current !== 'START') {
+                    stateRef.current = 'START';
+                    setExerciseState('START');
+                }
+            }
+            break;
+        }
       }
+
+      if (currentExercise === 'Squats' && currentMetric > 0) {
+        angleSumRef.current += currentMetric;
+        angleFrameCountRef.current += 1;
+      }
+      statsRef.current.totalFrames++;
+      if (isFormGood) statsRef.current.goodFrames++;
+
+      setIsBadForm(!isFormGood);
+      setFeedbackMessage(formError);
+
+      // --- ADAPTIVE VISUALIZATION LOGIC ---
+      
+      const skeletonColor = !isFormGood ? '#EF4444' : '#778873'; // Red or Sage
+      const landmarkColor = !isFormGood ? '#EF4444' : '#F1F3E0'; // Red or Cream
+
+      if (!isLateral) {
+         // --- Mode A: Full Frontal (Draw EVERYTHING) ---
+         // When user faces camera, show full body map for high-tech feel
+         window.drawConnectors(canvasCtx, lm, window.POSE_CONNECTIONS,
+             { color: skeletonColor, lineWidth: 4 });
+         
+         window.drawLandmarks(canvasCtx, lm,
+             { color: landmarkColor, lineWidth: 2, radius: 4 });
+      } else {
+         // --- Mode B: Lateral Precision (Draw VISIBLE SIDE only) ---
+         // Reduces visual noise to focus on alignment
+         
+         // Define connections for specific sides [start, end]
+         // Ear(7/8) -> Shoulder(11/12) -> Hip(23/24) -> Knee(25/26) -> Ankle(27/28)
+         // Shoulder -> Elbow(13/14) -> Wrist(15/16)
+         const lateralConnections = isLeft 
+            ? [[7, 11], [11, 23], [23, 25], [25, 27], [11, 13], [13, 15]] // Left side
+            : [[8, 12], [12, 24], [24, 26], [26, 28], [12, 14], [14, 16]]; // Right side
+
+         // Filter landmarks to only draw the visible ones
+         const visibleIndices = isLeft 
+            ? [7, 11, 13, 15, 23, 25, 27] 
+            : [8, 12, 14, 16, 24, 26, 28];
+            
+         const visibleLandmarks = visibleIndices.map(idx => lm[idx]);
+
+         window.drawConnectors(canvasCtx, lm, lateralConnections,
+             { color: skeletonColor, lineWidth: 4 });
+         
+         window.drawLandmarks(canvasCtx, visibleLandmarks,
+             { color: landmarkColor, lineWidth: 4, radius: 6 });
+      }
+
       canvasCtx.restore();
     };
 
@@ -285,10 +420,17 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
     };
   }, [currentExercise]);
 
-  const handleDeepAnalysis = async () => {
-    if (!webcamRef.current) return;
+  const startAnalysisCountdown = () => {
     setIsAnalyzing(true);
     setCoachInsight(null);
+    setCountdown(5); 
+  };
+
+  const performCaptureAndAnalysis = async () => {
+    setShowFlash(true);
+    setTimeout(() => setShowFlash(false), 200);
+
+    if (!webcamRef.current) return;
 
     try {
         const imageSrc = webcamRef.current.getScreenshot();
@@ -305,7 +447,7 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
             contents: {
                 parts: [
                     { inlineData: { mimeType: 'image/jpeg', data: base64Data } },
-                    { text: `Analyze this ${currentExercise} form. Is the spine neutral? Give one specific correction.` }
+                    { text: `Analyze this ${currentExercise} form in one short sentence. Is the posture correct?` }
                 ]
             }
         });
@@ -320,22 +462,35 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
   };
 
   const handleFinish = () => {
+    // Save the final active exercise stats
+    const currentValue = currentExercise === 'Plank' ? holdTimer : repCount;
+    const finalStats: Record<string, number> = { ...accumulatedStats.current };
+    
+    if (currentValue > 0) {
+        finalStats[currentExercise] = (finalStats[currentExercise] || 0) + currentValue;
+    }
+
     const durationSeconds = Math.floor((Date.now() - startTimeRef.current) / 1000);
     const accuracy = statsRef.current.totalFrames > 0 
         ? Math.round((statsRef.current.goodFrames / statsRef.current.totalFrames) * 100) 
         : 100;
+        
+    // Calculate total reps for legacy field
+    const totalReps = Object.entries(finalStats).reduce((acc, [name, val]) => {
+        return name === 'Plank' ? acc : acc + val;
+    }, 0);
 
     onSave({
         durationSeconds,
-        exercises: [currentExercise],
+        exercises: Object.keys(finalStats),
+        exerciseStats: finalStats, // Pass the detailed map
         painLevel: 2, 
         accuracyScore: accuracy,
-        reps: currentExercise === 'Plank' ? 0 : repCount, // No reps for plank
+        reps: totalReps, 
         averageAngle: Math.round(angleSumRef.current / (angleFrameCountRef.current || 1))
     });
   };
 
-  // Helper to format seconds to MM:SS
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -348,10 +503,9 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
       {/* 1. Header Bar */}
       <div className="shrink-0 z-20 p-4 flex justify-between items-center bg-white/95 backdrop-blur-sm border-b border-gray-100">
          <div className="flex items-center gap-4 flex-1">
-             {/* Exercise Dropdown - Professional Style */}
              <select 
                 value={currentExercise}
-                onChange={(e) => setCurrentExercise(e.target.value)}
+                onChange={(e) => switchExercise(e.target.value)}
                 className="bg-white text-[#778873] border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-[#778873]/50 focus:border-[#778873] cursor-pointer appearance-none shadow-sm transition-all hover:border-[#778873]"
              >
                 {EXERCISE_OPTIONS.map(ex => (
@@ -361,7 +515,6 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
 
              <div className="w-px h-6 bg-gray-200"></div>
              
-             {/* Dynamic Metric: Reps or Timer */}
              {currentExercise === 'Plank' ? (
                 <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-bold text-[#778873] tabular-nums">{formatTime(holdTimer)}</span>
@@ -384,7 +537,6 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
 
       {/* 2. Main Vision Area */}
       <div className="relative flex-1 bg-gray-50 overflow-hidden flex flex-col justify-center items-center p-4">
-         {/* Webcam Container */}
          <div className="relative w-full h-full max-w-5xl max-h-full flex items-center justify-center bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden aspect-video md:aspect-auto">
              <Webcam
                 ref={webcamRef}
@@ -397,12 +549,27 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
                 ref={canvasRef} 
                 className="absolute w-full h-full object-cover md:object-contain pointer-events-none"
             />
+            
+            {showFlash && (
+                <div className="absolute inset-0 bg-white z-50 animate-pulse pointer-events-none"></div>
+            )}
+            
+            {countdown !== null && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-40 backdrop-blur-sm">
+                    <div className="text-center text-white">
+                        <p className="text-8xl font-bold font-display animate-ping">{countdown}</p>
+                        <p className="text-xl font-medium mt-4 uppercase tracking-widest">Get into position!</p>
+                    </div>
+                </div>
+            )}
          </div>
          
-         {/* Phase Indicator (e.g., "DESCENDING") */}
+         {/* Phase Indicator */}
          <div className="absolute bottom-8 left-0 right-0 flex justify-center pointer-events-none z-20">
              <div className="bg-white/90 backdrop-blur px-4 py-1 rounded-full border border-gray-200 shadow-sm">
-                 <span className="text-[#778873] font-bold text-xs uppercase tracking-widest">{phase}</span>
+                 <span className={`font-bold text-xs uppercase tracking-widest ${exerciseState === 'ACTIVE' ? 'text-[#778873]' : 'text-slate-400'}`}>
+                    {exerciseState === 'ACTIVE' ? 'Active Phase' : 'Start Phase'}
+                 </span>
              </div>
          </div>
          
@@ -427,7 +594,7 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
                  </span>
                  <div className="flex items-center gap-2">
                      <span className={`text-5xl font-bold tracking-tighter ${isBadForm ? 'text-red-600' : 'text-gray-900'}`}>
-                         {displayMetric}{metricLabel === 'Angle' ? '°' : ''}
+                         {displayMetric}°
                      </span>
                  </div>
              </div>
@@ -456,7 +623,6 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
            </div>
          )}
          
-         {/* Loading State */}
          {!window.Pose && (
              <div className="absolute inset-0 flex items-center justify-center bg-white z-30">
                 <div className="text-center">
@@ -467,17 +633,16 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave }) => {
         )}
       </div>
 
-      {/* 3. Bottom Controls */}
       <div className="shrink-0 z-20 p-4 bg-white border-t border-gray-200">
           <div className="max-w-xl mx-auto flex flex-col md:flex-row gap-3">
                <Button 
                    fullWidth 
-                   onClick={handleDeepAnalysis}
-                   disabled={isAnalyzing}
+                   onClick={startAnalysisCountdown}
+                   disabled={isAnalyzing || countdown !== null}
                    variant="outline"
                    icon={isAnalyzing ? <div className="animate-spin h-5 w-5 border-2 border-[#778873] rounded-full border-t-transparent"/> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>}
                >
-                   {isAnalyzing ? "Analyzing..." : "Analyze Posture"}
+                   {countdown !== null ? `Capturing in ${countdown}...` : (isAnalyzing ? "Analyzing..." : "Analyze Posture")}
                </Button>
                
                <Button 

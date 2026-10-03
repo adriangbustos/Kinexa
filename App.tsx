@@ -28,9 +28,13 @@ function App() {
     
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        // Format exercise data for the prompt
+        const exerciseText = Object.entries(data.exerciseStats || {})
+            .map(([name, val]) => `${name}: ${val} ${name === 'Plank' ? 'seconds' : 'reps'}`)
+            .join(', ');
+
         const prompt = `Act as a Physiotherapist. Analyze this patient data: 
-            Total Reps: ${data.reps}
-            Average Knee Angle: ${data.averageAngle} degrees
+            Exercises Performed: ${exerciseText}
             Duration: ${data.durationSeconds} seconds
             Form Accuracy: ${data.accuracyScore}%
             
@@ -54,6 +58,7 @@ function App() {
         timestamp: new Date(),
         durationSeconds: data.durationSeconds,
         exercises: data.exercises,
+        exerciseStats: data.exerciseStats,
         painLevel: data.painLevel,
         accuracyScore: data.accuracyScore,
         reps: data.reps,

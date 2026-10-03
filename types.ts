@@ -4,6 +4,7 @@ export interface Session {
   timestamp: Date;
   durationSeconds: number;
   exercises: string[];
+  exerciseStats: Record<string, number>; // Map of Exercise Name -> Count/Seconds
   painLevel: number; // 1-10
   accuracyScore: number; // Percentage
   averageAngle?: number;
@@ -24,7 +25,7 @@ export enum ViewState {
   REPORT = 'REPORT',
 }
 
-// MediaPipe Global Types
+// Global Types
 declare global {
   interface Window {
     Pose: any;
@@ -32,5 +33,6 @@ declare global {
     drawConnectors: any;
     drawLandmarks: any;
     POSE_CONNECTIONS: any;
+    jspdf: any; // PDF Library
   }
 }
