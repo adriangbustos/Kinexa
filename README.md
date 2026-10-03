@@ -1,7 +1,3 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
-
 # Kinexa — AI-Powered Physical Therapy Companion
 
 **Kinexa** is an intelligent, real-time physical therapy and biomechanics rehabilitation companion. Designed for patients and physical therapists, Kinexa turns any standard webcam into a clinical motion-capture laboratory. It tracks movement kinematics in real time, validates exercise repetitions, provides instant corrective feedback, and leverages Google Gemini to produce clinical notes and downloadable patient reports.
