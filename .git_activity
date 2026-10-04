@@ -33,3 +33,4 @@
 2026-10-01T20:25:23 | refactor(engine): optimize exercise calculation routines
 2026-10-02T12:09:40 | style: polish UI layout and component spacing
 2026-10-04T17:38:29 | chore: clean up obsolete helpers and test fixtures
+2026-10-04T20:04:24 | docs: clarify config variables in documentation
