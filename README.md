@@ -83,9 +83,7 @@ Physical rehabilitation often suffers from adherence issues and improper exercis
 The user initiates a session, activating their web camera via `react-webcam`. The video stream is processed frame-by-frame by Google's **MediaPipe Pose** model running directly in the browser via WebAssembly and WebGL. It tracks 33 critical anatomical landmarks—including shoulders, elbows, wrists, hips, knees, and ankles—in 3D space with visibility scores.
 
 ### 2. Biomechanical Angle & Perspective Computation
-The application applies vector trigonometry (`Math.atan2`) across adjacent joint triples (e.g., shoulder-elbow-wrist for arm flexion, or hip-knee-ankle for leg extension) to compute planar joint angles:
-$$\theta = \left| \operatorname{atan2}(C_y - B_y, C_x - B_x) - \operatorname{atan2}(A_y - B_y, A_x - B_x) \right|$$
-Additionally, relative shoulder width distance is continuously evaluated to identify whether the user is facing the camera head-on or positioned laterally, dynamically adjusting the reference metric.
+The application applies vector trigonometry (`Math.atan2`) across adjacent joint triples (e.g., shoulder-elbow-wrist for arm flexion, or hip-knee-ankle for leg extension) to compute planar joint angles.
 
 ### 3. Finite State Machine (FSM) Repetition & Form Engine
 Each exercise is governed by an individual state engine:
