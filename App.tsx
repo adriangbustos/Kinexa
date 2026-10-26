@@ -3,6 +3,7 @@ import { Dashboard } from './components/Dashboard';
 import { SessionView } from './components/SessionView';
 import { Header } from './components/Header';
 import { ReportCard } from './components/ReportCard';
+import { SettingsModal, GEMINI_KEY_STORAGE, GEMINI_MODEL_STORAGE, DEFAULT_GEMINI_MODEL } from './components/SettingsModal';
 import { Session, ViewState } from './types';
 import { GoogleGenAI } from "@google/genai";
 
@@ -13,6 +14,11 @@ function App() {
   // Temp state for report view
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  
+  // Settings modal state
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsMessage, setSettingsMessage] = useState('');
+  const [keyVersion, setKeyVersion] = useState(0);
 
   const handleStartSession = () => {
     setView(ViewState.SESSION);
@@ -20,14 +26,26 @@ function App() {
 
   const handleBackToDashboard = () => {
     setView(ViewState.DASHBOARD);
-  }
+  };
+
+  const openSettingsWithMessage = (msg?: string) => {
+    setSettingsMessage(msg || '');
+    setIsSettingsOpen(true);
+  };
 
   const handleSessionComplete = async (data: any) => {
     setIsGeneratingReport(true);
     let summary = "Session analysis unavailable.";
     
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const apiKey = localStorage.getItem(GEMINI_KEY_STORAGE) || process.env.API_KEY;
+        const model = localStorage.getItem(GEMINI_MODEL_STORAGE) || DEFAULT_GEMINI_MODEL;
+
+        if (!apiKey) {
+          throw new Error("No Gemini API key configured.");
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
         // Format exercise data for the prompt
         const exerciseText = Object.entries(data.exerciseStats || {})
             .map(([name, val]) => `${name}: ${val} ${name === 'Plank' ? 'seconds' : 'reps'}`)
@@ -41,15 +59,15 @@ function App() {
             Write a 3-sentence clinical observation for their doctor, focusing on stability and consistency.`;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: model,
             contents: prompt,
         });
-        if (response.text) {
+        if (response && response.text) {
             summary = response.text;
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error("AI Generation failed", e);
-        summary = "Session completed. Unable to generate clinical observation at this time.";
+        summary = "Session completed. Configure your Gemini API key in Settings to generate AI doctor observations.";
     }
 
     const newSession: Session = {
@@ -69,7 +87,7 @@ function App() {
     setCurrentSession(newSession);
     setView(ViewState.REPORT);
     setIsGeneratingReport(false);
-  }
+  };
 
   const handleReportClose = () => {
     if (currentSession) {
@@ -79,13 +97,18 @@ function App() {
     setView(ViewState.DASHBOARD);
   };
 
+  const hasConfiguredKey = typeof window !== 'undefined' && !!localStorage.getItem(GEMINI_KEY_STORAGE);
+
   return (
-    <div className="min-h-screen bg-white font-sans selection:bg-[#778873] selection:text-white text-gray-900">
+    <div className="min-h-screen bg-paper font-sans selection:bg-charcoal selection:text-paper text-ink relative">
       {view === ViewState.DASHBOARD && (
-        <Header />
+        <Header 
+          onOpenSettings={() => openSettingsWithMessage()}
+          hasApiKey={hasConfiguredKey}
+        />
       )}
 
-      <main>
+      <main className="w-full">
         {view === ViewState.DASHBOARD && (
           <Dashboard sessions={sessions} onStartSession={handleStartSession} />
         )}
@@ -93,15 +116,16 @@ function App() {
         {view === ViewState.SESSION && (
             <>
             {isGeneratingReport ? (
-                <div className="fixed inset-0 bg-white/95 flex flex-col items-center justify-center z-[60] backdrop-blur-sm">
-                    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#778873] mb-6"></div>
-                    <h2 className="text-2xl font-bold text-gray-900 font-display">Generating Clinical Report...</h2>
-                    <p className="text-slate-500 mt-2">Dr. AI is analyzing your biomechanics.</p>
+                <div className="fixed inset-0 bg-paper/95 flex flex-col items-center justify-center z-[60] backdrop-blur-md p-4">
+                    <div className="animate-spin rounded-full h-12 w-12 border-2 border-cloud border-t-charcoal mb-5"></div>
+                    <h2 className="text-xl sm:text-2xl font-semibold text-ink tracking-tight">Generating Clinical Report...</h2>
+                    <p className="text-body-gray text-sm mt-1">Analyzing kinematics and angle metrics.</p>
                 </div>
             ) : (
                 <SessionView 
                     onExit={handleBackToDashboard}
                     onSave={handleSessionComplete}
+                    onOpenSettings={(msg) => openSettingsWithMessage(msg)}
                 />
             )}
             </>
@@ -114,6 +138,14 @@ function App() {
             />
         )}
       </main>
+
+      {/* Global Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        initialMessage={settingsMessage}
+        onKeySaved={() => setKeyVersion(v => v + 1)}
+      />
     </div>
   );
 }

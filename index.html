@@ -2,15 +2,53 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Kinexa</title>
-    <meta name="description" content="AI-powered physical therapy companion using computer vision and generative AI." />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Kinexa | Clinical Biomechanics & Motion Journal</title>
+    <meta name="description" content="AI-powered physical therapy companion inspired by Bevel health journal aesthetics." />
     <meta property="og:title" content="Kinexa" />
-    <meta property="og:description" content="AI-powered physical therapy companion using computer vision and generative AI." />
+    <meta property="og:description" content="AI-powered physical therapy companion inspired by Bevel health journal aesthetics." />
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              paper: '#ffffff',
+              charcoal: '#1f2025',
+              ink: '#222326',
+              cloud: '#ebf0f8',
+              'body-gray': '#747679',
+              'signal-gold': '#ffca00',
+              'coral-signal': '#ffab94',
+              'recovery-green': '#31ce01',
+              'metric-blue': '#415eee',
+              'sleep-lilac': '#b9a6ff',
+            },
+            fontFamily: {
+              sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', '"Segoe UI"', 'Roboto', 'sans-serif'],
+              display: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', 'sans-serif'],
+              mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+            },
+            borderRadius: {
+              '2xl': '16px',
+              '3xl': '24px',
+              '4xl': '32px',
+              'pill': '128px',
+            },
+            boxShadow: {
+              'bevel-card': '0px 0px 16px -8px rgba(0, 0, 0, 0.25)',
+              'bevel-float': '0px 2px 16px 0px rgba(0, 0, 0, 0.15)',
+              'bevel-subtle': '0px 4px 20px -4px rgba(0, 0, 0, 0.05)',
+            }
+          }
+        }
+      }
+    </script>
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- MediaPipe Dependencies (Pinned Version) -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
@@ -22,14 +60,77 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 
     <style>
-        body {
-            font-family: 'DM Sans', sans-serif;
-            background-color: #FFFFFF;
-            color: #111827;
+      /* Bevel Design Tokens from DESIGN.md */
+      :root {
+        --color-paper-white: #ffffff;
+        --color-charcoal: #1f2025;
+        --color-ink: #222326;
+        --color-cloud-card: #ebf0f8;
+        --color-body-gray: #747679;
+        --color-signal-gold: #ffca00;
+        --color-coral-signal: #ffab94;
+        --color-recovery-green: #31ce01;
+        --color-metric-blue: #415eee;
+        --color-sleep-lilac: #b9a6ff;
+        --gradient-hero-sky: linear-gradient(180deg, #d2e5ff 0%, #fff9ee 45%, #ffffff 100%);
+
+        --radius-cards: 24px;
+        --radius-buttons: 128px;
+        --radius-navigation: 32px;
+      }
+
+      /* Hallmark Floor #4: overflow-x: clip on html and body. Never hidden, never 100vw */
+      html, body {
+        overflow-x: clip;
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: var(--color-paper-white);
+        color: var(--color-ink);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+        font-size: 16px;
+        line-height: 1.4;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .tabular-nums {
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* Bevel display typography: 600 weight, tight tracking */
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+        overflow-wrap: break-word;
+        min-width: 0;
+        color: var(--color-ink);
+        font-weight: 600;
+        letter-spacing: -0.03em;
+        line-height: 1.05;
+      }
+
+      /* Hallmark Floor #6: instant :focus-visible */
+      :focus-visible {
+        outline: 2px solid var(--color-charcoal);
+        outline-offset: 2px;
+      }
+
+      /* Responsive touch target standards */
+      @media (pointer: coarse) {
+        button, a, input, select {
+          min-height: 44px;
         }
-        h1, h2, h3, h4, h5, h6 {
-            font-family: 'Space Grotesk', sans-serif;
+      }
+
+      /* Hallmark Floor #7: prefers-reduced-motion fallback */
+      @media (prefers-reduced-motion: reduce) {
+        *, ::before, ::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+          scroll-behavior: auto !important;
         }
+      }
     </style>
   <script type="importmap">
 {
@@ -44,7 +145,7 @@
 }
 </script>
 </head>
-  <body>
+  <body class="bg-paper text-ink">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
