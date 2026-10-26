@@ -4,7 +4,7 @@
 
 A clinical motion-capture and real-time physical therapy biomechanics companion powered by Google MediaPipe and Gemini.
 
-![Kinexa Preview](public/preview.png)
+![Kinexa Preview](public/snapshot.png)
 
 <div align="center">
   <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
