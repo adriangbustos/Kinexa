@@ -1,6 +1,10 @@
 # Kinexa — AI-Powered Physical Therapy Companion
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-44CC11?style=for-the-badge)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Access_Platform-blue?style=for-the-badge&logo=netlify)](#)
+
+A clinical motion-capture and real-time physical therapy biomechanics companion powered by Google MediaPipe and Gemini.
+
+![Kinexa Preview](public/preview.png)
 
 <div align="center">
   <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
@@ -11,9 +15,6 @@
   <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
   <img src="https://img.shields.io/badge/License-MIT-44CC11?style=for-the-badge" alt="MIT License" />
 </div>
-
-
-**Kinexa** is an intelligent, real-time physical therapy and biomechanics rehabilitation companion. Designed for patients and physical therapists, Kinexa turns any standard webcam into a clinical motion-capture laboratory. It tracks movement kinematics in real time, validates exercise repetitions, provides instant corrective feedback, and leverages Google Gemini to produce clinical notes and downloadable patient reports.
 
 ---
 
