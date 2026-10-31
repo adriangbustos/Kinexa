@@ -42,8 +42,8 @@ const EXERCISE_RULES = {
   Plank: {
     type: 'DURATION',
     metric: 'Body Alignment',
-    minAngle: 165,
-    maxAngle: 195,
+    minAngle: 145,
+    maxAngle: 180,
   }
 };
 
@@ -75,7 +75,7 @@ const AngleDial: React.FC<AngleDialProps> = ({
       case 'Lateral Lunge':
         return angle <= 110;
       case 'Plank':
-        return angle >= 165 && angle <= 195;
+        return angle >= 145 && angle <= 180;
       default:
         return false;
     }
@@ -141,7 +141,7 @@ const AngleDial: React.FC<AngleDialProps> = ({
           </div>
           <span className="text-[11px] text-body-gray block -mt-0.5 font-normal">
             {exercise === 'Plank' 
-              ? 'Target: 165°–195°' 
+              ? 'Target: 145°–180°' 
               : exercise === 'Squats'
               ? (viewpoint === 'LATERAL' ? 'Target: ≤ 100°' : 'Target: ≤ 130°')
               : 'Target: Depth Flexion'}
@@ -172,7 +172,7 @@ async function getOrCreatePoseInstance(): Promise<any> {
     });
 
     pose.setOptions({
-      modelComplexity: 1,
+      modelComplexity: 2,
       smoothLandmarks: true,
       enableSegmentation: false,
       minDetectionConfidence: 0.5,
@@ -238,6 +238,10 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave, onOpen
   const activeStartTimeRef = useRef<number>(0);
   const lastTimerTickRef = useRef<number>(0);
   const standingHipYRef = useRef<number>(0);
+  const smoothedPlankAngleRef = useRef<number>(0);
+  const [isVoiceActive, setIsVoiceActive] = useState<boolean>(false);
+  const [voiceToast, setVoiceToast] = useState<string | null>(null);
+  const voiceToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // --- Helpers ---
   const calculateAngle = (a: any, b: any, c: any) => {
@@ -254,8 +258,9 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave, onOpen
     return leftVis > rightVis ? 'LEFT' : 'RIGHT';
   };
 
-  const checkPlankForm = (shoulder: any, hip: any, knee: any) => {
-    const angle = calculateAngle(shoulder, hip, knee);
+  const checkPlankForm = (shoulder: any, hip: any, knee: any, ankle?: any) => {
+    const lowerJoint = (knee && (knee.visibility === undefined || knee.visibility >= 0.35)) ? knee : (ankle || knee);
+    const angle = calculateAngle(shoulder, hip, lowerJoint);
     const rules = EXERCISE_RULES.Plank;
     return angle >= rules.minAngle && angle <= rules.maxAngle;
   };
@@ -263,9 +268,9 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave, onOpen
   // --- Logic to Switch Exercise & Save Stats ---
   const switchExercise = (newExercise: string) => {
     // 1. Save current stats before switching
-    const currentValue = currentExercise === 'Plank' ? holdTimer : repCount;
+    const currentValue = currentExerciseRef.current === 'Plank' ? holdTimer : repCount;
     if (currentValue > 0) {
-      accumulatedStats.current[currentExercise] = (accumulatedStats.current[currentExercise] || 0) + currentValue;
+      accumulatedStats.current[currentExerciseRef.current] = (accumulatedStats.current[currentExerciseRef.current] || 0) + currentValue;
     }
     
     // 2. Switch
@@ -285,6 +290,7 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave, onOpen
     
     // Reset tracking refs specific to exercise mechanics
     standingHipYRef.current = 0;
+    smoothedPlankAngleRef.current = 0;
   }, [currentExercise]);
 
   useEffect(() => {
@@ -297,6 +303,86 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave, onOpen
     }
     return () => clearTimeout(timer);
   }, [countdown]);
+
+  // Hands-free English voice command listener (Web Speech API)
+  useEffect(() => {
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+
+    let recognition: any = null;
+    let isStoppedManually = false;
+
+    try {
+      recognition = new SpeechRec();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsVoiceActive(true);
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          console.warn('Speech recognition notice:', event.error);
+        }
+      };
+
+      recognition.onend = () => {
+        if (!isStoppedManually) {
+          try {
+            recognition.start();
+          } catch {
+            // Already started or busy
+          }
+        } else {
+          setIsVoiceActive(false);
+        }
+      };
+
+      recognition.onresult = (event: any) => {
+        const lastResultIndex = event.results.length - 1;
+        const transcript = event.results[lastResultIndex][0].transcript.toLowerCase().trim();
+        
+        let matchedExercise: string | null = null;
+        if (transcript.includes('squat')) {
+          matchedExercise = 'Squats';
+        } else if (transcript.includes('push') || transcript.includes('pushup') || transcript.includes('push up')) {
+          matchedExercise = 'Pushups';
+        } else if (transcript.includes('lunge')) {
+          matchedExercise = 'Lateral Lunge';
+        } else if (transcript.includes('plank')) {
+          matchedExercise = 'Plank';
+        }
+
+        if (matchedExercise && matchedExercise !== currentExerciseRef.current) {
+          switchExercise(matchedExercise);
+          setVoiceToast(`Voice Switch: ${matchedExercise}`);
+          if (voiceToastTimeoutRef.current) clearTimeout(voiceToastTimeoutRef.current);
+          voiceToastTimeoutRef.current = setTimeout(() => {
+            setVoiceToast(null);
+          }, 2500);
+        }
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.warn('Web Speech API unavailable or denied:', err);
+    }
+
+    return () => {
+      isStoppedManually = true;
+      if (voiceToastTimeoutRef.current) clearTimeout(voiceToastTimeoutRef.current);
+      if (recognition) {
+        try {
+          recognition.abort();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, []);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -759,6 +845,16 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave, onOpen
               ))}
             </select>
 
+            {/* Voice Control Indicator */}
+            {isVoiceActive && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-clinical/10 text-clinical border border-clinical/20" title="Voice command active: say 'squat', 'plank', 'pushup', or 'lunge'">
+                <svg className="w-3.5 h-3.5 animate-pulse text-clinical" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+                <span className="hidden lg:inline text-[11px] font-semibold">Voice: English</span>
+              </span>
+            )}
+
             {/* Viewpoint Perspective Badge */}
             <span className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-cloud text-body-gray">
               <span className="w-1.5 h-1.5 rounded-full bg-clinical"></span>
@@ -871,6 +967,15 @@ export const SessionView: React.FC<SessionViewProps> = ({ onExit, onSave, onOpen
               <div className="absolute top-2 right-2 w-4 h-4 border-t-2 border-r-2 border-clinical/70"></div>
               <div className="absolute bottom-2 left-2 w-4 h-4 border-b-2 border-l-2 border-clinical/70"></div>
               <div className="absolute bottom-2 right-2 w-4 h-4 border-b-2 border-r-2 border-clinical/70"></div>
+            </div>
+          )}
+
+          {voiceToast && (
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none transition-all duration-300">
+              <div className="bg-charcoal text-white px-4 py-2 rounded-full shadow-2xl backdrop-blur-md border border-white/20 flex items-center gap-2 text-xs font-semibold animate-bounce">
+                <span className="w-2 h-2 rounded-full bg-clinical animate-ping" />
+                <span>{voiceToast}</span>
+              </div>
             </div>
           )}
 

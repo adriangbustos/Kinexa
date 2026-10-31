@@ -28,7 +28,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const storedKey = localStorage.getItem(GEMINI_KEY_STORAGE) || '';
-      const storedModel = localStorage.getItem(GEMINI_MODEL_STORAGE) || DEFAULT_GEMINI_MODEL;
+      let storedModel = localStorage.getItem(GEMINI_MODEL_STORAGE) || DEFAULT_GEMINI_MODEL;
+      if (storedModel.includes('2.5')) {
+        storedModel = DEFAULT_GEMINI_MODEL;
+        localStorage.setItem(GEMINI_MODEL_STORAGE, DEFAULT_GEMINI_MODEL);
+      }
       setApiKey(storedKey);
       setModel(storedModel);
       setTestStatus('idle');
@@ -183,9 +187,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChange={(e) => setModel(e.target.value)}
               className="w-full bg-cloud text-ink font-medium rounded-2xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-charcoal transition-all cursor-pointer"
             >
-              <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Recommended • Fast & Lightweight)</option>
-              <option value="gemini-2.5-flash">gemini-2.5-flash (Balanced Analysis)</option>
-              <option value="gemini-3.8-flash">gemini-3.8-flash (High Depth Reasoning)</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash (Recommended • Fast & Clinical)</option>
+              <option value="gemini-2.0-flash">gemini-2.0-flash (High Speed)</option>
+              <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Ultra-low Latency)</option>
             </select>
           </div>
 

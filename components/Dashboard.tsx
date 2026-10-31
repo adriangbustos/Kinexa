@@ -5,6 +5,7 @@ import { Button } from './Button';
 interface DashboardProps {
   sessions: Session[];
   onStartSession: () => void;
+  onViewSession?: (session: Session) => void;
 }
 
 const PROTOCOLS = [
@@ -38,7 +39,7 @@ const PROTOCOLS = [
   }
 ];
 
-export const Dashboard: React.FC<DashboardProps> = ({ sessions, onStartSession }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ sessions, onStartSession, onViewSession }) => {
   const totalTime = sessions.reduce((acc, curr) => acc + curr.durationSeconds, 0);
   const avgAccuracy = sessions.length > 0 
     ? Math.round(sessions.reduce((acc, curr) => acc + curr.accuracyScore, 0) / sessions.length) 
@@ -206,10 +207,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ sessions, onStartSession }
           {sessions.length > 0 ? (
             <div className="bg-cloud rounded-3xl p-6 sm:p-8 space-y-4">
               {sessions.map((session) => {
-                const dateStr = session.timestamp.toLocaleDateString(undefined, { 
+                const sessionDate = session.timestamp instanceof Date ? session.timestamp : new Date(session.timestamp);
+                const dateStr = sessionDate.toLocaleDateString(undefined, { 
                   weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' 
                 });
-                const timeStr = session.timestamp.toLocaleTimeString(undefined, { 
+                const timeStr = sessionDate.toLocaleTimeString(undefined, { 
                   hour: '2-digit', minute: '2-digit' 
                 });
                 
@@ -246,13 +248,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ sessions, onStartSession }
                       </div>
                     </div>
 
-                    <div className="flex lg:flex-col items-center lg:items-end justify-between gap-2 shrink-0 pt-3 lg:pt-0 border-t lg:border-t-0 border-black/[0.05] text-xs text-body-gray">
-                      <span className="tabular-nums font-medium text-ink">
-                        {Math.floor(session.durationSeconds / 60)}m {session.durationSeconds % 60}s duration
-                      </span>
-                      <span className="tabular-nums">
-                        Pain score: <strong className="text-ink">{session.painLevel} / 10</strong>
-                      </span>
+                    <div className="flex lg:flex-col items-center lg:items-end justify-between gap-3 shrink-0 pt-3 lg:pt-0 border-t lg:border-t-0 border-black/[0.05] text-xs text-body-gray">
+                      <div className="flex flex-col lg:items-end">
+                        <span className="tabular-nums font-medium text-ink">
+                          {Math.floor(session.durationSeconds / 60)}m {session.durationSeconds % 60}s duration
+                        </span>
+                        <span className="tabular-nums">
+                          Pain score: <strong className="text-ink">{session.painLevel} / 10</strong>
+                        </span>
+                      </div>
+                      {onViewSession && (
+                        <Button 
+                          variant="outline" 
+                          onClick={() => onViewSession(session)}
+                          className="text-xs py-1.5 px-3.5 whitespace-nowrap mt-1"
+                          icon={
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                          }
+                        >
+                          View Full Report
+                        </Button>
+                      )}
                     </div>
                   </div>
                 );

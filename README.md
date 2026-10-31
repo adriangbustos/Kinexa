@@ -1,4 +1,4 @@
-# Kinexa — AI-Powered Physical Therapy Companion
+# Kinexa
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-Access_Platform-blue?style=for-the-badge&logo=netlify)](#)
 
@@ -154,44 +154,4 @@ Sessions are summarized on an interactive Report Card. Using `jsPDF` and `jspdf-
 ├── index.tsx                 # React DOM mount point
 ├── vite.config.ts            # Vite configuration
 └── tsconfig.json             # TypeScript compiler settings
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-- [Node.js](https://nodejs.org/) (version 18 or higher recommended)
-- A modern web browser with WebGL and camera access permissions enabled (Chrome, Edge, Firefox, or Safari)
-
-### Installation
-Clone the repository and install the dependencies:
-```bash
-git clone <repository-url>
-cd kinetic-rehab
-npm install
-```
-
-### Environment Configuration
-To enable AI clinical observations and snapshot coaching, provide your Gemini API key:
-Create a `.env` or `.env.local` file in the root directory:
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-### Development Server
-Start the local development server:
-```bash
-npm run dev
-```
-Open your browser and navigate to `http://localhost:3000`. Grant camera permissions when prompted.
-
-### Production Build
-To create an optimized production build:
-```bash
-npm run build
-```
-Preview the built application:
-```bash
-npm run preview
 ```
