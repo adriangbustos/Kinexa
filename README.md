@@ -1,6 +1,6 @@
 # Kinexa
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Access_Platform-blue?style=for-the-badge&logo=netlify)](#)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Access_Platform-blue?style=for-the-badge&logo=netlify)](https://agbkinexa.netlify.app/)
 
 A clinical motion-capture and real-time physical therapy biomechanics companion powered by Google MediaPipe and Gemini.
 
